@@ -1,46 +1,44 @@
-import { Trash, Pencil } from "lucide-react";
-import { Button } from "../ui/button";
 import { Card } from "../ui/card";
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
-import { Label } from "../ui/label";
-import { Input } from "../ui/input";
+import { db } from "@/lib/db";
+import { todosTable } from "@/lib/db/schema";
+import { revalidatePath } from "next/cache";
+import { eq } from "drizzle-orm";
+import { cn } from "cn";
+import { EditTodoDialog } from "./EditTodoDialog";
+import DeleteTodo from "./DeleteTodo";
+import MarkTodo from "./MarkTodo";
 
-export default function TodoCard({ todo }: { todo: { id: number; text: string } }) {
+export default function TodoCard({ todo }: { todo: { id: number; text: string | null; isCompleted: number | null } }) {
+
+  async function handleComplete() {
+    "use server"
+    const opposite: number = todo.isCompleted == 0 ? 1 : 0;
+    await db.update(todosTable).set({isCompleted: opposite}).where(eq(todosTable.id, todo.id))
+    revalidatePath("/")
+  }
+
+  async function handleDelete() {
+    "use server"
+    await db.delete(todosTable).where(eq(todosTable.id, todo.id))
+    revalidatePath("/")
+  }
+
+  async function handleEdit(editedTodo: FormData) {
+    "use server"
+    const text = editedTodo.get("edited-todo")
+    await db.update(todosTable).set({text: text?.toString()}).where(eq(todosTable.id, todo.id))
+    revalidatePath("/")
+  }
+
   return (
     <Card className="flex flex-row w-96 px-3 items-center justify-between">
       <div>
-        <p>{todo.text}</p>
+        <p className={cn(todo.isCompleted == 1 ? "line-through decoration-2" : "")}>{todo.text}</p>
       </div>
       <div className="flex gap-3">
-        <Dialog>
-              <form>
-            <DialogTrigger render={<Button size={"icon-sm"} variant={"noShadow"} className={"bg-amber-300"} />}><Pencil /></DialogTrigger>
-                <DialogContent className="sm:max-w-[425px]">
-                  <DialogHeader>
-                    <DialogTitle>Edit Todo</DialogTitle>
-                    <DialogDescription>
-                      Make changes to your todo here. Click save when you&apos;re
-                      done.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4">
-                    <div className="grid gap-3">
-                      <Label htmlFor="todo-text">Edit Todo</Label>
-                      <Input id="todo-text" name="text" defaultValue={todo.text} />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <DialogClose render={<Button variant="neutral" />}>
-                      Cancel
-                    </DialogClose>
-                    <Button type="submit">Save changes</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </form>
-            </Dialog>
-        <Button size={"icon-sm"} variant={"noShadow"} className={"bg-red-500"}>
-          <Trash />
-        </Button>
+        <MarkTodo todo={todo} handleComplete={handleComplete} />
+        <EditTodoDialog text={todo.text} saveTodo={handleEdit} />
+        <DeleteTodo handleDelete={handleDelete} />
       </div>
     </Card>
   );
